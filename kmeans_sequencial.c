@@ -10,7 +10,7 @@ typedef struct {
   int* coords;     // Vetor de coordenadas inteiras
   int cluster_id;  // ID do cluster ao qual o ponto pertence
 } Point;
-
+//aaa
 // --- Funções Utilitárias ---
 
 /**
