@@ -5,12 +5,16 @@
 #include <string.h>
 #include <time.h>  // Header correto para clock_gettime e struct timespec
 
+/** CAMINHO (APAGAR DEPOIS): /mnt/c/users/Pamela/Documents/IPPD/TrabalhoFinal/ippd-renazito
+ * sequencial: tempo -> 0.002358 valor -> 24322
+ * openmp: tempo -> 0.001681 valor -> 24322
+*/
+
 // Estrutura para representar um ponto no espaço D-dimensional
 typedef struct {
   int* coords;     // Vetor de coordenadas inteiras
   int cluster_id;  // ID do cluster ao qual o ponto pertence
 } Point;
-//aaa
 // --- Funções Utilitárias ---
 
 /**
@@ -20,8 +24,12 @@ typedef struct {
  */
 long long euclidean_dist_sq(Point* p1, Point* p2, int D) {
   long long dist = 0;
+  #pragma omp simd reduction(+:dist)
   for (int i = 0; i < D; i++) {
-    long long diff = (long long)p1->coords[i] - p2->coords[i];
+    //long long diff = (long long)p1->coords[i] - p2->coords[i];
+    long long a = p1->coords[i];
+    long long b = p2->coords[i];
+    long long diff = a - b;
     dist += diff * diff;
   }
   return dist;
@@ -56,6 +64,7 @@ void read_data_from_file(const char* filename, Point* points, int M, int D) {
  * @brief Inicializa os centroides escolhendo K pontos aleatórios do dataset.
  */
 void initialize_centroids(Point* points, Point* centroids, int M, int K, int D) {
+  #pragma omp barrier
   srand(42);  // Semente fixa para reprodutibilidade
 
   int* indices = (int*)malloc(M * sizeof(int));
@@ -80,11 +89,14 @@ void initialize_centroids(Point* points, Point* centroids, int M, int K, int D) 
 /**
  * @brief Fase de Atribuição: Associa cada ponto ao cluster do centroide mais próximo.
  */
-void assign_points_to_clusters(Point* points, Point* centroids, int M, int K, int D) {
+void assign_points_to_clusters(Point* points, Point* centroids, int M, int K, int D) { //PARALELIZAR
+
+  #pragma omp parallel for schedule(static)
   for (int i = 0; i < M; i++) {
     long long min_dist = LLONG_MAX;
     int best_cluster = -1;
 
+//#pragma omp paralell for
     for (int j = 0; j < K; j++) {
       long long dist = euclidean_dist_sq(&points[i], &centroids[j], D);
       if (dist < min_dist) {
@@ -100,29 +112,31 @@ void assign_points_to_clusters(Point* points, Point* centroids, int M, int K, in
  * @brief Fase de Atualização: Recalcula a posição de cada centroide como a média
  * (usando divisão inteira) de todos os pontos atribuídos ao seu cluster.
  */
-void update_centroids(Point* points, Point* centroids, int M, int K, int D) {
-  long long* cluster_sums = (long long*)calloc(K * D, sizeof(long long));
-  int* cluster_counts = (int*)calloc(K, sizeof(int));
+void update_centroids(Point* points, Point* centroids, int M, int K, int D) { //PARALELIZAR
+  long long* somaCoordenadasCluster = (long long*)calloc(K * D, sizeof(long long));
+  int* pontosEmCadaCluster = (int*)calloc(K, sizeof(int));
 
+  //#pragma omp parallel for 
   for (int i = 0; i < M; i++) {
     int cluster_id = points[i].cluster_id;
-    cluster_counts[cluster_id]++;
+    pontosEmCadaCluster[points[i].cluster_id]++;
     for (int j = 0; j < D; j++) {
-      cluster_sums[cluster_id * D + j] += points[i].coords[j];
+      somaCoordenadasCluster[cluster_id * D + j] += points[i].coords[j]; //faz o tamanho do grupo de clusters
     }
   }
 
+  #pragma omp parallel for 
   for (int i = 0; i < K; i++) {
-    if (cluster_counts[i] > 0) {
+    if (pontosEmCadaCluster[i] > 0) {
       for (int j = 0; j < D; j++) {
         // Divisão inteira para manter os centroides em coordenadas discretas
-        centroids[i].coords[j] = cluster_sums[i * D + j] / cluster_counts[i];
+        centroids[i].coords[j] = somaCoordenadasCluster[i * D + j] / pontosEmCadaCluster[i];
       }
     }
   }
 
-  free(cluster_sums);
-  free(cluster_counts);
+  free(somaCoordenadasCluster);
+  free(pontosEmCadaCluster);
 }
 
 /**
