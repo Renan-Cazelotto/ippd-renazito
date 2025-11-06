@@ -13,7 +13,6 @@ typedef struct {
   int* coords;     // Vetor de coordenadas inteiras
   int cluster_id;  // ID do cluster ao qual o ponto pertence
 } Point;
-//aaa
 // --- Funções Utilitárias ---
 
 /**
@@ -83,20 +82,67 @@ void initialize_centroids(Point* points, Point* centroids, int M, int K, int D) 
 /**
  * @brief Fase de Atribuição: Associa cada ponto ao cluster do centroide mais próximo.
  */
-void assign_points_to_clusters(Point* points, Point* centroids, int M, int K, int D) {
-  for (int i = 0; i < M; i++) {
-    long long min_dist = LLONG_MAX;
-    int best_cluster = -1;
 
-    for (int j = 0; j < K; j++) {
-      long long dist = euclidean_dist_sq(&points[i], &centroids[j], D);
-      if (dist < min_dist) {
-        min_dist = dist;
-        best_cluster = j;
-      }
+ typedef struct {
+    long thread_id;
+    int M, K, D, thread_count;
+    Point *points;
+    Point *centroids;
+} ThreadArgs;
+
+ void *points_to_cluster_thread(void *arg){
+    ThreadArgs *data = (ThreadArgs*) arg;
+
+    long my_id = data->thread_id;
+    int M = data->M;
+    int K = data->K;
+    int D = data->D;
+    int thread_count = data->thread_count;
+    Point *points = data->points;
+    Point *centroids = data->centroids;
+
+    int local_M = M / thread_count;
+    int start = my_id * local_M;
+    int end = (my_id == thread_count - 1) ? M : start + local_M;
+    
+    for (int i = start; i < end; i++) {
+        long long min_dist = LLONG_MAX;
+        int best_cluster = -1;
+
+        for (int j = 0; j < K; j++) {
+        long long dist = euclidean_dist_sq(&points[i], &centroids[j], D);
+        if (dist < min_dist) {
+            min_dist = dist;
+            best_cluster = j;
+        }
+        }
+        points[i].cluster_id = best_cluster;
     }
-    points[i].cluster_id = best_cluster;
-  }
+    return NULL;
+ }
+
+void assign_points_to_clusters(Point* points, Point* centroids, int M, int K, int D) {
+    pthread_t *thread_handles;
+    thread_handles = malloc(thread_count*sizeof(pthread_t));
+    ThreadArgs *thread_args = malloc(thread_count * sizeof(ThreadArgs));
+    for (long thread = 0; thread < thread_count; thread++) {
+        thread_args[thread].thread_id = thread;
+        thread_args[thread].M = M;
+        thread_args[thread].K = K;
+        thread_args[thread].D = D;
+        thread_args[thread].thread_count = thread_count;
+        thread_args[thread].points = points;
+        thread_args[thread].centroids = centroids;
+
+        pthread_create(&thread_handles[thread], NULL, points_to_cluster_thread, &thread_args[thread]);
+    }
+
+    for (int thread = 0; thread < thread_count; thread++) {
+        pthread_join(thread_handles[thread], NULL);
+    }
+
+    free(thread_handles);
+    free(thread_args);
 }
 
 /**
@@ -169,19 +215,18 @@ void print_time_and_checksum(Point* centroids, int K, int D, double exec_time) {
 
 int main(int argc, char* argv[]) {
   // Validação e leitura dos argumentos de linha de comando
-  if (argc != 6) {
-    fprintf(stderr, "Uso: %s <arquivo_dados> <M_pontos> <D_dimensoes> <K_clusters> <I_iteracoes>\n", argv[0]);
+  if (argc != 7) {
+    fprintf(stderr, "Uso: %s <arquivo_dados> <M_pontos> <D_dimensoes> <K_clusters> <I_iteracoes> <threads>\n", argv[0]);
     return EXIT_FAILURE;
   }
 
-  pthread_t *thread_handles;
   const char* filename = argv[1];  // Nome do arquivo de dados
   const int M = atoi(argv[2]);     // Número de pontos
   const int D = atoi(argv[3]);     // Número de dimensões
   const int K = atoi(argv[4]);     // Número de clusters
   const int I = atoi(argv[5]);     // Número de iterações
-  thread_count = strtol(argv[6], NULL, 10);
-  thread_handles = malloc(thread_count*sizeof(pthread_t));
+  thread_count = atol(argv[6]);
+
 
   if (M <= 0 || D <= 0 || K <= 0 || I <= 0 || K > M) {
     fprintf(stderr, "Erro nos parâmetros. Verifique se M,D,K,I > 0 e K <= M.\n");
