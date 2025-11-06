@@ -51,7 +51,7 @@ void read_data_from_file(const char* filename, Point* points, int M, int D) {
 
   fclose(file);
 }
-
+// oi Niveaa
 /**
  * @brief Inicializa os centroides escolhendo K pontos aleatórios do dataset.
  */
