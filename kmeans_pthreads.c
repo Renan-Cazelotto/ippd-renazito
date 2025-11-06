@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>  // Header correto para clock_gettime e struct timespec
+#include <pthread.h>
+
+long thread_count;
 
 // Estrutura para representar um ponto no espaço D-dimensional
 typedef struct {
@@ -171,11 +174,14 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
+  pthread_t *thread_handles;
   const char* filename = argv[1];  // Nome do arquivo de dados
   const int M = atoi(argv[2]);     // Número de pontos
   const int D = atoi(argv[3]);     // Número de dimensões
   const int K = atoi(argv[4]);     // Número de clusters
   const int I = atoi(argv[5]);     // Número de iterações
+  thread_count = strtol(argv[6], NULL, 10);
+  thread_handles = malloc(thread_count*sizeof(pthread_t));
 
   if (M <= 0 || D <= 0 || K <= 0 || I <= 0 || K > M) {
     fprintf(stderr, "Erro nos parâmetros. Verifique se M,D,K,I > 0 e K <= M.\n");
