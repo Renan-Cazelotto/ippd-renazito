@@ -82,7 +82,10 @@ def run_benchmark(golden_checksum, args):
         base_cmd = [f"./{exe['output']}"] + args
         run_env = os.environ.copy()
         if exe['type'] == 'omp': run_env['OMP_NUM_THREADS'] = str(CPU_CORES)
-        elif exe['type'] == 'mpi': base_cmd = ["mpirun", "-np", str(CPU_CORES)] + base_cmd
+        elif exe['type'] == 'mpi': #editado para funcionar no meu pc
+            # Força 4 ranks
+            num_procs = 4
+            base_cmd = ["mpirun", "-np", str(num_procs)] + base_cmd
             
         for i in range(NUM_RUNS):
             print(f"  Execução {i + 1}/{NUM_RUNS}... ", end='', flush=True)
